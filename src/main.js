@@ -10,47 +10,64 @@ window.addEventListener('DOMContentLoaded', () => {
   const REDIRECT_URI = 'https://festiby.vercel.app/'; // Redirección a la app en Vercel
   const SCOPES = 'user-top-read';
 
-  // --- CREAR ELEMENTOS MODULARES ---
-  const app = document.getElementById('app');
-  app.innerHTML = '';
+  // --- CREAR INTERFAZ MODULAR ---
+  let loginBtn, userInfo, artistTextArea, analyzeBtn, inputSection, resultsList, resultsSection, errorMsg;
 
-  // Título
-  const title = document.createElement('h1');
-  title.textContent = 'Recomendador de Artistas para tu Spotify';
-  app.appendChild(title);
+  function createUI() {
+    const app = document.getElementById('app');
+    app.innerHTML = '';
 
-  // Botón login
-  const loginBtn = Button({ id: 'login-btn', text: 'Iniciar sesión con Spotify' });
-  app.appendChild(loginBtn);
+    // Título
+    const title = document.createElement('h1');
+    title.textContent = 'Recomendador de Artistas para tu Spotify';
+    app.appendChild(title);
 
-  // Info usuario
-  const userInfo = document.createElement('div');
-  userInfo.id = 'user-info';
-  userInfo.style.display = 'none';
-  app.appendChild(userInfo);
+    // Mensaje de error
+    errorMsg = document.createElement('div');
+    errorMsg.id = 'error-msg';
+    errorMsg.style.display = 'none';
+    errorMsg.style.background = '#ff4d4f';
+    errorMsg.style.color = '#fff';
+    errorMsg.style.padding = '0.7em 1em';
+    errorMsg.style.borderRadius = '8px';
+    errorMsg.style.margin = '1em auto';
+    errorMsg.style.maxWidth = '400px';
+    errorMsg.style.fontWeight = 'bold';
+    app.appendChild(errorMsg);
 
-  // TextArea de artistas
-  const artistTextArea = TextArea({ id: 'artist-list', placeholder: 'Ejemplo:\nRosalía\nC. Tangana\nBad Bunny', rows: 8, cols: 40 });
-  // Botón analizar
-  const analyzeBtn = Button({ id: 'analyze-btn', text: 'Analizar' });
-  // Sección input
-  const inputSection = Section({
-    id: 'input-section',
-    title: 'Pega tu listado de artistas (uno por línea):',
-    children: [artistTextArea, document.createElement('br'), analyzeBtn],
-  });
-  inputSection.style.display = 'none';
-  app.appendChild(inputSection);
+    // Botón login
+    loginBtn = Button({ id: 'login-btn', text: 'Iniciar sesión con Spotify' });
+    app.appendChild(loginBtn);
 
-  // Sección resultados
-  const resultsList = ResultList({ id: 'results-list' });
-  const resultsSection = Section({
-    id: 'results-section',
-    title: 'Artistas que más te pueden gustar:',
-    children: [resultsList],
-  });
-  resultsSection.style.display = 'none';
-  app.appendChild(resultsSection);
+    // Info usuario
+    userInfo = document.createElement('div');
+    userInfo.id = 'user-info';
+    userInfo.style.display = 'none';
+    app.appendChild(userInfo);
+
+    // TextArea de artistas
+    artistTextArea = TextArea({ id: 'artist-list', placeholder: 'Ejemplo:\nRosalía\nC. Tangana\nBad Bunny', rows: 8, cols: 40 });
+    // Botón analizar
+    analyzeBtn = Button({ id: 'analyze-btn', text: 'Analizar' });
+    // Sección input
+    inputSection = Section({
+      id: 'input-section',
+      title: 'Pega tu listado de artistas (uno por línea):',
+      children: [artistTextArea, document.createElement('br'), analyzeBtn],
+    });
+    inputSection.style.display = 'none';
+    app.appendChild(inputSection);
+
+    // Sección resultados
+    resultsList = ResultList({ id: 'results-list' });
+    resultsSection = Section({
+      id: 'results-section',
+      title: 'Artistas que más te pueden gustar:',
+      children: [resultsList],
+    });
+    resultsSection.style.display = 'none';
+    app.appendChild(resultsSection);
+  }
 
   // --- PKCE UTILS ---
   function base64urlencode(a) {
@@ -77,10 +94,14 @@ window.addEventListener('DOMContentLoaded', () => {
     return Array.from(array, dec => ('0' + dec.toString(16)).substr(-2)).join('').substr(0, length);
   }
 
-  // --- FLUJO PKCE Y LÓGICA DE AUTENTICACIÓN ---
+  // --- INICIALIZACIÓN ---
+  createUI();
+
   let accessToken = localStorage.getItem('spotify_access_token');
 
+  // Asignar eventos después de crear los elementos
   loginBtn.onclick = async () => {
+    errorMsg.style.display = 'none';
     const codeVerifier = generateRandomString(64);
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     localStorage.setItem('spotify_code_verifier', codeVerifier);
@@ -95,89 +116,25 @@ window.addEventListener('DOMContentLoaded', () => {
     window.location = `https://accounts.spotify.com/authorize?${params.toString()}`;
   };
 
-  async function handleAuth() {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    if (code) {
-      // Intercambiar code por token
-      const codeVerifier = localStorage.getItem('spotify_code_verifier');
-      const body = new URLSearchParams({
-        client_id: CLIENT_ID,
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: REDIRECT_URI,
-        code_verifier: codeVerifier,
-      });
-      const res = await fetch('https://accounts.spotify.com/api/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body,
-      });
-      const data = await res.json();
-      if (data.access_token) {
-        accessToken = data.access_token;
-        localStorage.setItem('spotify_access_token', accessToken);
-        window.history.replaceState({}, document.title, '/'); // Limpia el code de la URL
-        showLoggedUI();
-      } else {
-        alert('Error autenticando con Spotify');
-        showLoginUI();
-      }
-    } else if (accessToken) {
-      showLoggedUI();
-    } else {
-      showLoginUI();
-    }
-  }
-
-  function showLoginUI() {
-    loginBtn.style.display = 'block';
-    userInfo.style.display = 'none';
-    inputSection.style.display = 'none';
-    resultsSection.style.display = 'none';
-  }
-
-  function showLoggedUI() {
-    loginBtn.style.display = 'none';
-    userInfo.style.display = 'block';
-    inputSection.style.display = 'block';
-    showUserInfo();
-  }
-
-  // --- OBTENER INFO DE USUARIO Y TOP ARTISTAS ---
-  async function showUserInfo() {
-    const user = await fetchSpotify('https://api.spotify.com/v1/me');
-    userInfo.innerHTML = `<p>¡Hola, ${user.display_name}!</p>`;
-  }
-
-  async function getUserTopArtists() {
-    const res = await fetchSpotify('https://api.spotify.com/v1/me/top/artists?limit=50');
-    return res.items;
-  }
-
-  // --- UTILIDAD PARA LLAMADAS A SPOTIFY ---
-  async function fetchSpotify(url) {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!res.ok) throw new Error('Error en la API de Spotify');
-    return res.json();
-  }
-
-  // --- ANÁLISIS DE ARTISTAS ---
   analyzeBtn.onclick = async () => {
+    errorMsg.style.display = 'none';
     resultsSection.style.display = 'none';
     resultsList.innerHTML = '';
     const input = artistTextArea.value;
     const artistNames = input.split('\n').map(a => a.trim()).filter(Boolean);
-    if (!artistNames.length) return alert('Introduce al menos un artista.');
-
+    if (!artistNames.length) {
+      errorMsg.textContent = 'Introduce al menos un artista.';
+      errorMsg.style.display = 'block';
+      return;
+    }
     // 1. Obtener tus artistas y géneros favoritos
     let userTopArtists = [];
     try {
       userTopArtists = await getUserTopArtists();
     } catch (e) {
-      alert('Error obteniendo tus artistas de Spotify. ¿Has iniciado sesión?');
+      errorMsg.textContent = 'Error obteniendo tus artistas de Spotify. ¿Has iniciado sesión?';
+      errorMsg.style.display = 'block';
+      console.error('Error getUserTopArtists', e);
       return;
     }
     const userGenres = new Set(userTopArtists.flatMap(a => a.genres));
@@ -210,6 +167,97 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     resultsSection.style.display = 'block';
   };
+
+  // --- FLUJO PKCE Y LÓGICA DE AUTENTICACIÓN ---
+  async function handleAuth() {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (code) {
+      console.log('Recibido code de Spotify:', code);
+      // Intercambiar code por token
+      const codeVerifier = localStorage.getItem('spotify_code_verifier');
+      const body = new URLSearchParams({
+        client_id: CLIENT_ID,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: REDIRECT_URI,
+        code_verifier: codeVerifier,
+      });
+      try {
+        const res = await fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body,
+        });
+        const data = await res.json();
+        console.log('Respuesta de /api/token:', data);
+        if (data.access_token) {
+          accessToken = data.access_token;
+          localStorage.setItem('spotify_access_token', accessToken);
+          window.history.replaceState({}, document.title, '/'); // Limpia el code de la URL
+          showLoggedUI();
+        } else {
+          errorMsg.textContent = 'Error autenticando con Spotify: ' + (data.error_description || data.error || 'Desconocido');
+          errorMsg.style.display = 'block';
+          showLoginUI();
+        }
+      } catch (e) {
+        errorMsg.textContent = 'Error de red al autenticar con Spotify.';
+        errorMsg.style.display = 'block';
+        showLoginUI();
+        console.error('Error en fetch /api/token', e);
+      }
+    } else if (accessToken) {
+      showLoggedUI();
+    } else {
+      showLoginUI();
+    }
+  }
+
+  function showLoginUI() {
+    console.log('Mostrando login UI');
+    loginBtn.style.display = 'block';
+    userInfo.style.display = 'none';
+    inputSection.style.display = 'none';
+    resultsSection.style.display = 'none';
+  }
+
+  function showLoggedUI() {
+    console.log('Mostrando UI de usuario logueado');
+    loginBtn.style.display = 'none';
+    userInfo.style.display = 'block';
+    inputSection.style.display = 'block';
+    resultsSection.style.display = 'none';
+    errorMsg.style.display = 'none';
+    showUserInfo();
+  }
+
+  // --- OBTENER INFO DE USUARIO Y TOP ARTISTAS ---
+  async function showUserInfo() {
+    try {
+      const user = await fetchSpotify('https://api.spotify.com/v1/me');
+      userInfo.innerHTML = `<p>¡Hola, ${user.display_name}!</p>`;
+    } catch (e) {
+      errorMsg.textContent = 'No se pudo obtener la información de usuario de Spotify.';
+      errorMsg.style.display = 'block';
+      userInfo.innerHTML = '';
+      console.error('Error showUserInfo', e);
+    }
+  }
+
+  async function getUserTopArtists() {
+    const res = await fetchSpotify('https://api.spotify.com/v1/me/top/artists?limit=50');
+    return res.items;
+  }
+
+  // --- UTILIDAD PARA LLAMADAS A SPOTIFY ---
+  async function fetchSpotify(url) {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) throw new Error('Error en la API de Spotify');
+    return res.json();
+  }
 
   // --- BUSCAR ARTISTA EN SPOTIFY ---
   async function searchArtist(name) {
